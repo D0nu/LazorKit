@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { LazorKitContext } from '../context/LazorkitContext';
-
+import '../../polyfills'
 import './globals.css'
 import '../components/components.css';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 const inter = Inter({ subsets: ['latin'] });
 
