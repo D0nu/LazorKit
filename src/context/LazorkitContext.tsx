@@ -19,15 +19,37 @@ const config = {
   // This is where the passkey creation and verification happens
   PORTAL_URL: 'https://portal.lazor.sh',
  
-  // RPC URL: The Solana blockchain node we connect to
-  // Using Lazorkit's devnet RPC for better reliability
-  // NOTE: This is where all blockchain data is read from
-  RPC_URL: 'https://kora.devnet.lazorkit.com', 
+  /**
+   * ⚠️ IMPORTANT FIX: SEPARATING RPC AND PAYMASTER
+   * 
+   * BEFORE (INCORRECT):
+   * - We were using 'https://kora.devnet.lazorkit.com' for BOTH RPC and Paymaster
+   * 
+   * THE PROBLEM:
+   * - kora.devnet.lazorkit.com is a PAYMASTER service (for gasless transactions)
+   * - It's NOT a full Solana RPC node (can't read blockchain data properly)
+   * - This causes the CORS error you're seeing
+   * 
+   * THE SOLUTION:
+   * - Use Solana's official devnet RPC for reading blockchain data
+   * - Use kora.devnet.lazorkit.com ONLY for the paymaster (gasless transactions)
+   * 
+   * WHY THIS FIXES THE CORS ERROR:
+   * - Solana's official RPC accepts requests from any origin (no CORS restrictions)
+   * - The paymaster is only called when sending transactions (not for reads)
+   * - Most wallet operations (checking balance, reading accounts) use RPC, not paymaster
+   */
+  
+  // RPC URL: The Solana blockchain node we connect to for reading/writing data
+  // Using Solana's official devnet - it's public and has no CORS restrictions
+  RPC_URL: 'https://api.devnet.solana.com',
   
   // Paymaster configuration: Enables gasless transactions
+  // This is ONLY used when sending transactions, not for reading data
   // WHY THIS IS IMPORTANT: Users don't need SOL to pay for gas fees
   // The paymaster service covers the transaction costs
   PAYMASTER: {
+    // kora.devnet.lazorkit.com is the paymaster - it pays for your transaction fees
     paymasterUrl: 'https://kora.devnet.lazorkit.com',
     // apiKey: 'your_api_key_here', // Optional: Use if you have a custom API key
   },
@@ -90,12 +112,12 @@ export function LazorKitContext({ children }: { children: React.ReactNode }) {
        * - Connects to the correct Solana network (devnet)
        * 
        * PARAMETERS EXPLAINED:
-       * - rpcUrl: Where to read/write blockchain data
-       * - portalUrl: Where passkeys are managed
-       * - paymasterConfig: How gasless transactions are handled
+       * - rpcUrl: Where to read/write blockchain data (Solana's official devnet)
+       * - portalUrl: Where passkeys are managed (Lazorkit's auth server)
+       * - paymasterConfig: How gasless transactions are handled (Lazorkit's paymaster)
        * - clusterSimulation: Which Solana network (devnet = test network)
        * 
-       * NOTE: For production, change 'devnet' to 'mainnet-beta'
+       * NOTE: For production, change 'devnet' to 'mainnet-beta' and update URLs
        */
       registerLazorkitWallet({
         rpcUrl: config.RPC_URL, 
@@ -129,14 +151,15 @@ export function LazorKitContext({ children }: { children: React.ReactNode }) {
    * Each provider wraps the next, adding layers of functionality:
    * 
    * 1. ConnectionProvider (OUTERMOST)
-   *    - Establishes connection to Solana blockchain
+   *    - Establishes connection to Solana blockchain via RPC
+   *    - Uses Solana's official devnet (no CORS issues)
    *    - Provides RPC endpoint to all children
    *    - Handles network communication
    * 
    * 2. LazorkitProvider
    *    - Adds Lazorkit-specific features
    *    - Manages passkey authentication
-   *    - Configures gasless transactions
+   *    - Configures gasless transactions (uses paymaster when sending txs)
    *    - Provides the useWallet() hook
    * 
    * 3. WalletProvider
@@ -167,10 +190,10 @@ export function LazorKitContext({ children }: { children: React.ReactNode }) {
             {/* 
               YOUR ENTIRE APP GOES HERE 
               All child components now have access to:
-              - Blockchain connection (via ConnectionProvider)
+              - Blockchain connection (via ConnectionProvider) - reads from Solana's official RPC
               - Wallet state and functions (via useWallet hook)
-              - Passkey authentication (via Lazorkit)
-              - Gasless transactions (via Paymaster)
+              - Passkey authentication (via Lazorkit portal)
+              - Gasless transactions (via Lazorkit paymaster - only used when sending transactions)
             */}
             {children}
           </WalletModalProvider>
@@ -192,11 +215,16 @@ export function LazorKitContext({ children }: { children: React.ReactNode }) {
  *     disconnect,           // Function to log out
  *     isConnected,          // Boolean: is user signed in?
  *     smartWalletPubkey,    // User's wallet address
- *     signAndSendTransaction // Function to send transactions
+ *     signAndSendTransaction // Function to send transactions (uses paymaster for gasless)
  *   } = useWallet();
  * 
  *   return <button onClick={() => connect({ feeMode: 'paymaster' })}>
  *     Sign In
  *   </button>
  * }
+ * 
+ * TRANSACTION FLOW:
+ * 1. User clicks "Sign In" → passkey authentication via portal.lazor.sh
+ * 2. User reads data (balance, NFTs, etc.) → data comes from api.devnet.solana.com
+ * 3. User sends transaction → transaction fee paid by kora.devnet.lazorkit.com (gasless!)
  */
