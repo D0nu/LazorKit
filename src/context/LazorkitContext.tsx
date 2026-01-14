@@ -3,6 +3,7 @@ import { useMemo, useEffect } from 'react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { LazorkitProvider, registerLazorkitWallet } from '@lazorkit/wallet';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
+import { Buffer } from 'buffer'; // ✅ IMPORTANT: Buffer polyfill import
 
 /**
  * CONFIGURATION OBJECT
@@ -90,13 +91,15 @@ export function LazorKitContext({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       
       /**
-       * BUFFER POLYFILL FIX
+       * ✅ BUFFER POLYFILL FIX (CRITICAL)
        * 
        * WHY WE NEED THIS:
        * - Solana's web3.js library uses Node.js's Buffer
        * - Browsers don't have Buffer natively
        * - This line ensures Buffer is available in the browser
        * - Without this, you'll get "Buffer is not defined" errors
+       * 
+       * NOTE: We imported Buffer at the top of this file
        */
       window.Buffer = window.Buffer || Buffer;
 
@@ -202,29 +205,3 @@ export function LazorKitContext({ children }: { children: React.ReactNode }) {
     </ConnectionProvider>
   );
 }
-
-/**
- * USAGE EXAMPLE IN OTHER COMPONENTS:
- * 
- * import { useWallet } from '@lazorkit/wallet';
- * 
- * function MyComponent() {
- *   // Now you can use these anywhere in your app!
- *   const { 
- *     connect,              // Function to sign in with passkey
- *     disconnect,           // Function to log out
- *     isConnected,          // Boolean: is user signed in?
- *     smartWalletPubkey,    // User's wallet address
- *     signAndSendTransaction // Function to send transactions (uses paymaster for gasless)
- *   } = useWallet();
- * 
- *   return <button onClick={() => connect({ feeMode: 'paymaster' })}>
- *     Sign In
- *   </button>
- * }
- * 
- * TRANSACTION FLOW:
- * 1. User clicks "Sign In" → passkey authentication via portal.lazor.sh
- * 2. User reads data (balance, NFTs, etc.) → data comes from api.devnet.solana.com
- * 3. User sends transaction → transaction fee paid by kora.devnet.lazorkit.com (gasless!)
- */
