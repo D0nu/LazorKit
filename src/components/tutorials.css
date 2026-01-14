@@ -1,0 +1,548 @@
+/* components/tutorials.css */
+
+.tutorial-section {
+  width: 100%;
+}
+
+/* Header Styles */
+.tutorial-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.tutorial-title {
+  font-size: 2.25rem;
+  font-weight: 800;
+  margin-bottom: 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.tutorial-subtitle {
+  color: #9ca3af;
+  font-size: 1.125rem;
+  max-width: 42rem;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* Tutorial List Styles */
+.tutorial-list-container {
+  background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+  border: 1px solid #374151;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.tutorial-list-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  color: white;
+}
+
+.tutorial-item {
+  width: 100%;
+  text-align: left;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  margin-bottom: 0.75rem;
+  border: 1px solid transparent;
+  background: rgba(55, 65, 81, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.tutorial-item:hover {
+  background: rgba(79, 70, 229, 0.15);
+  border-color: rgba(99, 102, 241, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(79, 70, 229, 0.2);
+}
+
+.tutorial-item.active {
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.2) 0%, rgba(99, 102, 241, 0.1) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.3), 0 10px 25px rgba(79, 70, 229, 0.2);
+}
+
+.tutorial-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.tutorial-item-title {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: white;
+  flex: 1;
+  margin-right: 0.75rem;
+}
+
+.tutorial-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  border: 1px solid;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tutorial-badge-beginner {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.3);
+}
+
+.tutorial-badge-intermediate {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.3);
+}
+
+.tutorial-badge-advanced {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+.tutorial-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+.active-indicator {
+  position: absolute;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  top: 1rem;
+}
+
+.active-indicator-left {
+  right: 2.5rem;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  animation: pulse-blue 2s infinite;
+}
+
+.active-indicator-right {
+  right: 1rem;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  animation: pulse-green 2s infinite;
+}
+
+/* Tutorial Panel Styles */
+.tutorial-panel {
+  background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+  border: 1px solid #374151;
+  border-radius: 1rem;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  height: 100%;
+}
+
+.tutorial-panel:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.tutorial-panel-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #374151;
+}
+
+.tutorial-panel-header-left {
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.1) 0%, transparent 100%);
+}
+
+.tutorial-panel-header-right {
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.1) 0%, transparent 100%);
+}
+
+.panel-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  display: inline-block;
+  margin-bottom: 0.75rem;
+}
+
+.panel-badge-left {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+}
+
+.panel-badge-right {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.panel-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: white;
+  margin-bottom: 0.5rem;
+}
+
+.panel-description {
+  font-size: 0.875rem;
+  color: #9ca3af;
+  line-height: 1.5;
+}
+
+.toggle-btn {
+  padding: 0.5rem 1rem;
+  background: rgba(55, 65, 81, 0.5);
+  color: white;
+  border: 1px solid #4b5563;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.toggle-btn:hover {
+  background: #374151;
+  border-color: #6b7280;
+}
+
+.toggle-btn:active {
+  transform: scale(0.98);
+}
+
+/* Tutorial Content Styles */
+.tutorial-content {
+  padding: 1.5rem;
+  min-height: 280px;
+}
+
+.tutorial-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.tutorial-step {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 1.25rem;
+}
+
+.step-number {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.875rem;
+  margin-right: 1rem;
+  margin-top: 0.125rem;
+}
+
+.step-number-left {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+}
+
+.step-number-right {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+}
+
+.step-text {
+  color: #d1d5db;
+  line-height: 1.6;
+  flex: 1;
+  padding-top: 0.25rem;
+}
+
+/* Code Display Styles */
+.code-container {
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  position: relative;
+}
+
+.code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(75, 85, 99, 0.3);
+}
+
+.code-language {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.code-block {
+  font-family: 'Fira Code', 'Consolas', 'Monaco', 'Andale Mono', monospace;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: #e5e7eb;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.code-tip {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Tutorial Actions Styles */
+.tutorial-actions {
+  padding: 1.5rem;
+  border-top: 1px solid #374151;
+  background: linear-gradient(180deg, transparent 0%, rgba(17, 24, 39, 0.5) 100%);
+}
+
+.actions-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .actions-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.btn-primary {
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  transition: all 0.3s;
+  display: block;
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
+}
+
+.btn-secondary {
+  padding: 0.75rem 1.5rem;
+  background: rgba(55, 65, 81, 0.8);
+  color: white;
+  border: 1px solid #4b5563;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  transition: all 0.3s;
+  display: block;
+}
+
+.btn-secondary:hover {
+  background: #374151;
+  border-color: #6b7280;
+  transform: translateY(-2px);
+}
+
+.btn-primary-left {
+  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+}
+
+.btn-primary-right {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+/* Controls Section */
+.controls-section {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, rgba(31, 41, 55, 0.8) 0%, rgba(17, 24, 39, 0.8) 100%);
+  border: 1px solid #374151;
+  border-radius: 0.75rem;
+}
+
+.controls-info {
+  font-size: 0.875rem;
+  color: #9ca3af;
+  margin-bottom: 1rem;
+}
+
+.controls-info strong {
+  color: white;
+}
+
+.controls-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.control-btn {
+  padding: 0.5rem 1rem;
+  background: rgba(55, 65, 81, 0.8);
+  color: white;
+  border: 1px solid #4b5563;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.control-btn:hover {
+  background: #374151;
+  border-color: #6b7280;
+}
+
+.control-btn-primary {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  border: none;
+}
+
+.control-btn-primary:hover {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+}
+
+/* Animations */
+@keyframes pulse-blue {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0);
+  }
+}
+
+@keyframes pulse-green {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+  }
+  50% {
+    opacity: 0.7;
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Pro Tips Section */
+.pro-tips {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: rgba(55, 65, 81, 0.3);
+  border-radius: 0.75rem;
+  border-left: 4px solid #8b5cf6;
+}
+
+.pro-tips p {
+  font-size: 0.875rem;
+  color: #9ca3af;
+  margin: 0;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .tutorial-title {
+    font-size: 1.875rem;
+  }
+  
+  .tutorial-subtitle {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .tutorial-panel-header {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+  
+  .toggle-btn {
+    align-self: flex-start;
+  }
+  
+  .actions-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Custom Scrollbar */
+.tutorial-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.tutorial-content::-webkit-scrollbar-track {
+  background: rgba(31, 41, 55, 0.5);
+  border-radius: 4px;
+}
+
+.tutorial-content::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  border-radius: 4px;
+}
+
+.tutorial-content::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+}
+.tutorial-panel {
+  background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+  border: 1px solid #374151;
+  border-radius: 1rem;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  height: 100%;
+  will-change: transform;
+}
+
+.tutorial-panel:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+
+}
