@@ -1,11 +1,8 @@
 'use client';
 
-// ============================================
-// IMPORTS
-// ============================================
 import { useState, useEffect, useRef } from 'react';
 import { useWallet } from '@lazorkit/wallet';
-import { Connection, clusterApiUrl } from '@solana/web3.js';
+import { Connection, PublicKey } from '@solana/web3.js';
 
 // Component imports
 import { AuthButton } from '../components/LazorkitButtons';
@@ -45,110 +42,110 @@ export default function Home() {
   // Ref for mobile menu to detect outside clicks
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
+  // Refs to track state changes
+  const hasFetchedRef = useRef(false);
+  const fetchInProgressRef = useRef(false);
+  const lastFetchedAddressRef = useRef<string>('');
+
   // ============================================
-  // EFFECT: Close mobile menu on outside click
+  // EFFECT: Initialize Solana connection (ONCE)
   // ============================================
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
-        setMobileMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // ============================================
-  // EFFECT: Close mobile menu on escape key
-  // ============================================
-  useEffect(() => {
-    const handleEscapeKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setMobileMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('keydown', handleEscapeKey);
-    return () => document.removeEventListener('keydown', handleEscapeKey);
-  }, []);
-
-  // ============================================
-  // EFFECT: Initialize Solana connection
-  // ============================================
-  useEffect(() => {
-    const conn = new Connection(clusterApiUrl('devnet'), 'confirmed');
-    setConnection(conn);
-  }, []);
-
-  // ============================================
-  // EFFECT: Fetch wallet info when connected
-  // ============================================
-  useEffect(() => {
-    const getWalletInfo = async () => {
-      if (isConnected && smartWalletPubkey && connection) {
-        setIsLoading(true);
-        try {
-          const address = smartWalletPubkey.toString();
-          console.log('Real smart wallet address:', address);
-          await fetchBalance(address);
-        } catch (error) {
-          console.error('Error getting wallet info:', error);
-          setBalance('0.0000');
-        } finally {
-          setIsLoading(false);
-        }
-      } else {
-        setBalance('0.0000');
-      }
-    };
-
-    getWalletInfo();
-  }, [isConnected, smartWalletPubkey, connection]);
+    if (!connection) {
+      console.log('🔗 Initializing Solana connection...');
+      const conn = new Connection('https://api.devnet.solana.com', 'confirmed');
+      setConnection(conn);
+    }
+  }, []); // Empty dependency array - run once
 
   // ============================================
   // FUNCTION: Fetch wallet balance
   // ============================================
   const fetchBalance = async (address: string) => {
-    if (!connection) return;
+    // Prevent duplicate fetches
+    if (!connection || fetchInProgressRef.current || lastFetchedAddressRef.current === address) {
+      console.log('⏸️ Fetch skipped - already fetching or same address');
+      return;
+    }
     
+    console.log('🔄 Fetching balance for:', address);
+    fetchInProgressRef.current = true;
+    lastFetchedAddressRef.current = address;
     setIsLoading(true);
+    
     try {
-      // Use Solana RPC to get balance
-      const response = await fetch('https://api.devnet.solana.com', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'getBalance',
-          params: [address]
-        })
-      });
+      const pubkey = new PublicKey(address);
       
-      const data = await response.json();
+      // Get balance in lamports, then convert to SOL
+      const balanceInLamports = await connection.getBalance(pubkey);
+      const solBalance = (balanceInLamports / 1000000000).toFixed(4);
       
-      if (data.result && data.result.value !== undefined) {
-        // Convert lamports to SOL (1 SOL = 1,000,000,000 lamports)
-        const solBalance = (data.result.value / 1000000000).toFixed(4);
-        setBalance(solBalance);
-      } else {
-        setBalance('0.0000');
-      }
+      console.log('✅ Balance fetched:', solBalance, 'SOL');
+      setBalance(solBalance);
+      hasFetchedRef.current = true;
     } catch (error) {
-      console.error('Error fetching balance:', error);
+      console.error('❌ Error fetching balance:', error);
       setBalance('0.0000');
     } finally {
       setIsLoading(false);
+      fetchInProgressRef.current = false;
     }
   };
+
+  // ============================================
+  // EFFECT: Fetch wallet info when connected
+  // ============================================
+  useEffect(() => {
+    let mounted = true;
+    
+    const fetchIfNeeded = async () => {
+      if (!mounted) return;
+      
+      if (isConnected && smartWalletPubkey && connection && !hasFetchedRef.current) {
+        const address = smartWalletPubkey.toString();
+        console.log('🔑 Wallet connected, address:', address);
+        await fetchBalance(address);
+      } else if (!isConnected) {
+        // Reset when disconnected
+        setBalance('0.0000');
+        hasFetchedRef.current = false;
+        lastFetchedAddressRef.current = '';
+      }
+    };
+
+    // Use a small timeout to ensure state is stable
+    const timer = setTimeout(() => {
+      fetchIfNeeded();
+    }, 100);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timer);
+    };
+  }, [isConnected, smartWalletPubkey, connection]);
 
   // ============================================
   // FUNCTION: Manual balance refresh
   // ============================================
   const handleRefreshBalance = () => {
-    if (smartWalletPubkey) {
+    if (smartWalletPubkey && !isLoading) {
+      console.log('🔄 Manual refresh requested');
+      hasFetchedRef.current = false; // Reset to allow fresh fetch
       fetchBalance(smartWalletPubkey.toString());
+    }
+  };
+
+  // ============================================
+  // FUNCTION: Handle transaction completion
+  // ============================================
+  const handleTransactionComplete = () => {
+    if (smartWalletPubkey) {
+      console.log('✅ Transaction complete, refreshing balance...');
+      // Wait for blockchain confirmation before refreshing
+      setTimeout(() => {
+        hasFetchedRef.current = false; // Reset to allow fresh fetch
+        fetchBalance(smartWalletPubkey.toString());
+      }, 2000);
     }
   };
 
@@ -168,6 +165,50 @@ export default function Home() {
       element.scrollIntoView({ behavior: 'smooth' });
       closeMobileMenu();
     }
+  };
+
+  // ============================================
+  // RENDER: Wallet content
+  // ============================================
+  const renderWalletContent = () => {
+    // Don't show loading if we already have the wallet connected and balance
+    if (isLoading && !(isConnected && smartWalletPubkey)) {
+      return (
+        <div className="wallet-placeholder p-6 text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading wallet...</p>
+        </div>
+      );
+    }
+    
+    // Show connected wallet dashboard
+    if (isConnected && smartWalletPubkey) {
+      return (
+        <WalletDashboard 
+          setActiveTab={setActiveTab}
+          walletAddress={smartWalletPubkey.toString()}
+          isConnected={isConnected}
+          balance={balance}
+          onRefreshBalance={handleRefreshBalance}
+        />
+      );
+    }
+    
+    // Show connect wallet prompt
+    return (
+      <div className="wallet-placeholder">
+        <div className="wallet-icon">
+          <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
+        </div>
+        <h3>Connect Your Wallet</h3>
+        <p>Sign in with passkey to access demo features</p>
+        <div className="wallet-connect-button">
+          <AuthButton classes='btn btn-primary'/>
+        </div>
+      </div>
+    );
   };
 
   // ============================================
@@ -237,12 +278,10 @@ export default function Home() {
               aria-expanded={mobileMenuOpen}
             >
               {mobileMenuOpen ? (
-                // Close icon
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               ) : (
-                // Hamburger icon
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
@@ -300,7 +339,6 @@ export default function Home() {
             </a>
           </div>
           
-          {/* Mobile menu footer */}
           <div className="mt-auto pt-8">
             <div className="text-center text-sm text-gray-400">
               <p>Built for the Lazorkit Bounty Program</p>
@@ -321,7 +359,7 @@ export default function Home() {
           <div className="container">
             <div className="hero-grid">
               
-              {/* Left Content - Text and CTAs */}
+              {/* Left Content */}
               <div className="hero-content">
                 <span className="badge">
                   <span className="badge-dot"></span>
@@ -356,7 +394,6 @@ export default function Home() {
                   </a>
                 </div>
 
-                {/* Stats Display */}
                 <div className="hero-stats">
                   <div className="stat-item">
                     <h3 className="stat-value">100%</h3>
@@ -377,39 +414,7 @@ export default function Home() {
               <div className="hero-right">
                 <div className="card">
                   <div className="card-badge">✨</div>
-                  
-                  {/* Show loading state */}
-                  {isLoading ? (
-                    <div className="wallet-placeholder p-6 text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                      <p className="text-gray-600 dark:text-gray-400">Loading wallet...</p>
-                    </div>
-                  ) : 
-                  /* Show wallet dashboard if connected */
-                  isConnected && smartWalletPubkey ? (
-                    <WalletDashboard 
-                      setActiveTab={setActiveTab}
-                      walletAddress={smartWalletPubkey.toString()}
-                      isConnected={isConnected}
-                      balance={balance}
-                      onRefreshBalance={handleRefreshBalance}
-                    />
-                  ) : 
-                  /* Show connect prompt if not connected */
-                  (
-                    <div className="wallet-placeholder">
-                      <div className="wallet-icon">
-                        <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
-                      </div>
-                      <h3>Connect Your Wallet</h3>
-                      <p>Sign in with passkey to access demo features</p>
-                      <div className="wallet-connect-button">
-                        <AuthButton classes='btn btn-primary'/>
-                      </div>
-                    </div>
-                  )}
+                  {renderWalletContent()}
                 </div>
               </div>
             </div>
@@ -431,7 +436,7 @@ export default function Home() {
         </section>
 
         {/* ============================================
-            DEMO SECTION - Interactive Tabs
+            DEMO SECTION
             ============================================ */}
         <section id="demo" className="section demo-section">
           <div className="section-header">
@@ -443,9 +448,7 @@ export default function Home() {
           <div className="demo-tabs">
             <div className="tabs-container">
               
-              {/* Tab Navigation */}
               <div className="tabs-header">
-                {/* Transfer Tab */}
                 <button
                   onClick={() => setActiveTab('transfer')}
                   className={`tab-button btn btn-primary ${activeTab === 'transfer' ? 'active' : ''}`}
@@ -458,7 +461,6 @@ export default function Home() {
                   <span className="sm:hidden">Transfer SOL</span>
                 </button>
                 
-                {/* Sign Message Tab */}
                 <button
                   onClick={() => setActiveTab('sign')}
                   className={`tab-button btn btn-primary ${activeTab === 'sign' ? 'active' : ''}`}
@@ -471,7 +473,6 @@ export default function Home() {
                   <span className="sm:hidden">Sign Message</span>
                 </button>
                 
-                {/* Mint NFT Tab */}
                 <button
                   onClick={() => setActiveTab('nft')}
                   className={`tab-button btn btn-primary ${activeTab === 'nft' ? 'active' : ''}`}
@@ -485,18 +486,12 @@ export default function Home() {
                 </button>
               </div>
 
-              {/* Tab Content - Conditionally rendered based on active tab */}
               <div className="tab-content">
                 {activeTab === 'transfer' && (
                   <TransactionPanel 
                     fromAddress={smartWalletPubkey?.toString()}
                     balance={balance}
-                    onTransactionComplete={() => {
-                      // Refresh balance after successful transaction
-                      if (smartWalletPubkey) {
-                        setTimeout(() => fetchBalance(smartWalletPubkey.toString()), 3000);
-                      }
-                    }}
+                    onTransactionComplete={handleTransactionComplete}
                   />
                 )}
                 {activeTab === 'sign' && <MessageSigningPanel />}

@@ -1,7 +1,7 @@
 // components/WalletDashboard.tsx
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import './WalletDashboard.css';
 // import { useWallet } from '@lazorkit/wallet';
 
@@ -75,115 +75,53 @@ export function WalletDashboard({
 }: WalletDashboardProps) {
   const [usdValue, setUsdValue] = useState<string>('0.00');
   const [copied, setCopied] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [priceLoading, setPriceLoading] = useState<boolean>(false);
+  
+  // Track if we're currently fetching price to prevent duplicates
+  const isFetchingPriceRef = useRef(false);
   
   const network = 'Devnet';
 
-  // Get SOL price using CORS-friendly APIs
-  useEffect(() => {
-    const getSOLPrice = async (): Promise<number> => {
-      // Try multiple CORS-friendly APIs
-      const apis = [
-        // 1. CoinCap API - usually allows localhost
-        async () => {
-          try {
-            const response = await fetch('https://api.coincap.io/v2/assets/solana');
-            if (response.ok) {
-              const data = await response.json();
-              return parseFloat(data.data.priceUsd);
-            }
-          } catch (error) {
-            console.log('CoinCap API failed');
-          }
-          return null;
-        },
-        
-        // 2. Kraken API - often works with localhost
-        async () => {
-          try {
-            const response = await fetch('https://api.kraken.com/0/public/Ticker?pair=SOLUSD');
-            if (response.ok) {
-              const data = await response.json();
-              const price = data.result?.SOLUSD?.c?.[0];
-              return price ? parseFloat(price) : null;
-            }
-          } catch (error) {
-            console.log('Kraken API failed');
-          }
-          return null;
-        },
-        
-        // 3. Public CDN for price data
-        async () => {
-          try {
-            const response = await fetch('https://min-api.cryptocompare.com/data/price?fsym=SOL&tsyms=USD');
-            if (response.ok) {
-              const data = await response.json();
-              return data.USD || null;
-            }
-          } catch (error) {
-            console.log('CryptoCompare API failed');
-          }
-          return null;
-        },
-        
-        // 4. Use a CORS proxy service
-        async () => {
-          try {
-            const proxyUrl = 'https://corsproxy.io/?';
-            const targetUrl = 'https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd';
-            const response = await fetch(proxyUrl + encodeURIComponent(targetUrl));
-            
-            if (response.ok) {
-              const data = await response.json();
-              return data.solana?.usd || null;
-            }
-          } catch (error) {
-            console.log('CORS proxy failed');
-          }
-          return null;
-        },
-        
-        // 5. Alternative CORS proxy
-        async () => {
-          try {
-            const proxyUrl = 'https://api.allorigins.win/get?url=';
-            const targetUrl = 'https://api.binance.com/api/v3/ticker/price?symbol=SOLUSDT';
-            const response = await fetch(proxyUrl + encodeURIComponent(targetUrl));
-            
-            if (response.ok) {
-              const data = await response.json();
-              const parsed = JSON.parse(data.contents);
-              return parseFloat(parsed.price);
-            }
-          } catch (error) {
-            console.log('AllOrigins proxy failed');
-          }
-          return null;
-        }
-      ];
+  // ============================================
+  // DEBOUNCED SOL PRICE FETCHER (FIXED)
+  // ============================================
+  const getSOLPrice = useCallback(async (): Promise<number> => {
+    // Prevent duplicate price fetches
+    if (isFetchingPriceRef.current) {
+      return 150; // Return fallback if already fetching
+    }
 
-      // Try each API in sequence
-      for (const api of apis) {
-        try {
-          const price = await api();
-          if (price && price > 0) {
-            console.log(`Got SOL price: $${price} from ${api.name || 'API'}`);
-            return price;
-          }
-        } catch (error) {
-          continue;
+    isFetchingPriceRef.current = true;
+
+    try {
+      // Try CoinCap API first (most reliable)
+      const response = await fetch('https://api.coincap.io/v2/assets/solana');
+      if (response.ok) {
+        const data = await response.json();
+        const price = parseFloat(data.data.priceUsd);
+        if (price && price > 0) {
+          console.log(`✅ Got SOL price: $${price.toFixed(2)}`);
+          return price;
         }
       }
-      
-      // Fallback to static price
-      console.log('All APIs failed, using fallback price');
-      return 150;
-    };
+    } catch (error) {
+      console.log('CoinCap API failed, using fallback');
+    } finally {
+      isFetchingPriceRef.current = false;
+    }
+    
+    // Fallback price if API fails
+    console.log('Using fallback SOL price: $150');
+    return 150;
+  }, []);
 
-    const updateUsdValue = async (solBalance: string) => {
-      const balanceNum = parseFloat(solBalance);
+  // ============================================
+  // EFFECT: Update USD value when balance changes (DEBOUNCED)
+  // ============================================
+  useEffect(() => {
+    const updateUsdValue = async () => {
+      const balanceNum = parseFloat(balance);
       
       if (balanceNum <= 0.001) {
         setUsdValue('0.00');
@@ -197,11 +135,9 @@ export function WalletDashboard({
         const calculatedUsd = (balanceNum * solPrice).toFixed(2);
         setUsdValue(calculatedUsd);
         
-        // Show a note in console about the price source
-        console.log(`Balance: ${balanceNum} SOL, Price: $${solPrice}, Total: $${calculatedUsd}`);
+        console.log(`💰 Balance: ${balanceNum} SOL = $${calculatedUsd} USD`);
       } catch (error) {
-        console.error('Failed to get SOL price:', error);
-        // Fallback calculation
+        console.error('Failed to calculate USD value:', error);
         const calculatedUsd = (balanceNum * 150).toFixed(2);
         setUsdValue(calculatedUsd);
       } finally {
@@ -209,27 +145,34 @@ export function WalletDashboard({
       }
     };
 
-    // Debounce the API call
+    // Debounce the USD calculation - only run after 800ms of no balance changes
     const timer = setTimeout(() => {
       if (balance && parseFloat(balance) > 0.001) {
-        updateUsdValue(balance);
+        updateUsdValue();
       } else {
         setUsdValue('0.00');
+        setPriceLoading(false);
       }
-    }, 500); // Small delay to prevent rapid calls
+    }, 800);
 
     return () => clearTimeout(timer);
-  }, [balance]);
+  }, [balance, getSOLPrice]);
 
-  const handleCopyAddress = () => {
+  // ============================================
+  // FUNCTION: Copy wallet address
+  // ============================================
+  const handleCopyAddress = useCallback(() => {
     if (walletAddress) {
       navigator.clipboard.writeText(walletAddress);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
-  };
+  }, [walletAddress]);
 
-  const handleSend = () => {
+  // ============================================
+  // FUNCTION: Navigate to send tab
+  // ============================================
+  const handleSend = useCallback(() => {
     if (setActiveTab) {
       setActiveTab('transfer');
     }
@@ -238,18 +181,27 @@ export function WalletDashboard({
     if (transactionSection) {
       transactionSection.scrollIntoView({ behavior: 'smooth' });
     }
-  };
+  }, [setActiveTab]);
 
-  const handleRefresh = () => {
-    setIsLoading(true);
+  // ============================================
+  // FUNCTION: Refresh balance (FIXED - Prevent spam)
+  // ============================================
+  const handleRefresh = useCallback(() => {
+    if (isRefreshing) return; // Prevent spam clicks
+    
+    setIsRefreshing(true);
     
     if (onRefreshBalance) {
       onRefreshBalance();
     }
     
-    setTimeout(() => setIsLoading(false), 1500);
-  };
+    // Ensure loading state clears after 2 seconds max
+    setTimeout(() => setIsRefreshing(false), 2000);
+  }, [isRefreshing, onRefreshBalance]);
 
+  // ============================================
+  // FUNCTION: Truncate address for display
+  // ============================================
   const truncateAddress = (addr: string | undefined): string => {
     if (!addr) return 'Not Connected';
     const cleanAddr = addr.replace('...', '');
@@ -257,6 +209,9 @@ export function WalletDashboard({
     return `${cleanAddr.slice(0, 6)}...${cleanAddr.slice(-4)}`;
   };
 
+  // ============================================
+  // RENDER: Not Connected State
+  // ============================================
   if (!isConnected) {
     return (
       <div className="wallet-dashboard">
@@ -273,6 +228,9 @@ export function WalletDashboard({
     );
   }
 
+  // ============================================
+  // RENDER: Connected State
+  // ============================================
   return (
     <div className="wallet-dashboard">
       {/* Header */}
@@ -293,10 +251,10 @@ export function WalletDashboard({
           <h3 className="balance-label">Total Balance</h3>
           <button
             onClick={handleRefresh}
-            disabled={isLoading}
+            disabled={isRefreshing}
             className="balance-refresh"
           >
-            {isLoading ? (
+            {isRefreshing ? (
               <>
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -323,7 +281,7 @@ export function WalletDashboard({
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
-                Loading live price...
+                Calculating...
               </span>
             ) : (
               `$${usdValue} USD`
@@ -339,7 +297,7 @@ export function WalletDashboard({
             </span>
           </div>
           <div className="mt-2 text-xs text-gray-400">
-            <p>Live price fetched from crypto APIs</p>
+            <p>Live price from CoinCap API</p>
           </div>
         </div>
       </div>

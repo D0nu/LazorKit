@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { TransactionsButton } from './LazorkitButtons';
 import { PublicKey } from '@solana/web3.js';
 import { useWallet } from '@lazorkit/wallet';
@@ -70,7 +70,9 @@ export function TransactionPanel({
   
   const { smartWalletPubkey } = useWallet();
 
-  // Initialize with own address if available
+  // ============================================
+  // EFFECT: Initialize with own address
+  // ============================================
   useEffect(() => {
     if (smartWalletPubkey) {
       setRecipient(smartWalletPubkey.toString());
@@ -78,8 +80,10 @@ export function TransactionPanel({
     }
   }, [smartWalletPubkey]);
 
-  // Validate Solana address
-  const validateSolanaAddress = (address: string): boolean => {
+  // ============================================
+  // FUNCTION: Validate Solana address
+  // ============================================
+  const validateSolanaAddress = useCallback((address: string): boolean => {
     if (!address.trim()) return false;
     try {
       new PublicKey(address);
@@ -87,17 +91,21 @@ export function TransactionPanel({
     } catch (error) {
       return false;
     }
-  };
+  }, []);
 
-  // Handle recipient change with validation
-  const handleRecipientChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ============================================
+  // FUNCTION: Handle recipient change
+  // ============================================
+  const handleRecipientChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setRecipient(value);
     setIsValidAddress(validateSolanaAddress(value));
-  };
+  }, [validateSolanaAddress]);
 
-  // Handle amount change with validation
-  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // ============================================
+  // FUNCTION: Handle amount change
+  // ============================================
+  const handleAmountChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
 
     if (value === '') {
@@ -109,13 +117,21 @@ export function TransactionPanel({
     if (!isNaN(parsed)) {
       setAmount(parsed);
     }
-  };
+  }, []);
 
-  // Auto-clear success + notify parent
+  // ============================================
+  // EFFECT: Auto-clear success and trigger parent callback
+  // ============================================
   useEffect(() => {
     if (txSuccess) {
-      onTransactionComplete?.();
+      console.log('✅ Transaction succeeded! Notifying parent...');
+      
+      // Call parent's callback to refresh balance
+      if (onTransactionComplete) {
+        onTransactionComplete();
+      }
 
+      // Clear success message after 10 seconds
       const timer = setTimeout(() => {
         setTxSuccess(false);
       }, 10000);
@@ -124,7 +140,9 @@ export function TransactionPanel({
     }
   }, [txSuccess, onTransactionComplete]);
 
-  // Auto-clear error
+  // ============================================
+  // EFFECT: Auto-clear error
+  // ============================================
   useEffect(() => {
     if (txError) {
       const timer = setTimeout(() => {
@@ -135,15 +153,15 @@ export function TransactionPanel({
     }
   }, [txError]);
 
-  // Test transaction with a known good address
-  const testTransaction = async () => {
+  // ============================================
+  // FUNCTION: Test transaction setup
+  // ============================================
+  const testTransaction = useCallback(async () => {
     setIsTesting(true);
     
-    // If user has a smart wallet, suggest sending to themselves
     if (smartWalletPubkey) {
       setRecipient(smartWalletPubkey.toString());
     } else {
-      // Use a known devnet faucet address
       setRecipient('9gQnXgx8YqTcNCUSJ6Y8RQ4KvZjE7ZkPT4WQHTE5qmTg');
     }
     
@@ -159,10 +177,12 @@ export function TransactionPanel({
       }
       setTimeout(() => setMessage(''), 3000);
     }, 1000);
-  };
+  }, [smartWalletPubkey]);
 
-  // Copy own address for testing
-  const copyOwnAddress = () => {
+  // ============================================
+  // FUNCTION: Copy address
+  // ============================================
+  const copyOwnAddress = useCallback(() => {
     if (smartWalletPubkey) {
       navigator.clipboard.writeText(smartWalletPubkey.toString());
       setMessage('✅ Smart wallet address copied!');
@@ -172,8 +192,11 @@ export function TransactionPanel({
       setMessage('✅ Address copied!');
       setTimeout(() => setMessage(''), 3000);
     }
-  };
+  }, [smartWalletPubkey, fromAddress]);
 
+  // ============================================
+  // RENDER
+  // ============================================
   return (
     <div className="glass-md rounded-xl p-6 sm:p-8">
       {/* Header */}
@@ -245,7 +268,7 @@ export function TransactionPanel({
                 </div>
               </div>
               
-              {/* REAL Balance Display - Show real fetched balance */}
+              {/* Balance Display */}
               <div className="balance-info-card">
                 <div className="balance-row">
                   <div className="balance-main">
@@ -261,8 +284,8 @@ export function TransactionPanel({
                     )}
                   </div>
                   <div className="balance-demo-label">
-                    <p>Demo Balance</p>
-                    <p>For testing only</p>
+                    <p>Real Balance</p>
+                    <p>From blockchain</p>
                   </div>
                 </div>
               </div>
@@ -424,7 +447,7 @@ export function TransactionPanel({
                 </svg>
               </div>
               <div className="feedback-success-text">
-                <div className="feedback-success-title">Success!</div>
+                <div className="feedback-success-title">Success! 🎉</div>
                 <div className="feedback-success-message">{txSuccess.toString()}</div>
               </div>
             </div>
@@ -442,11 +465,11 @@ export function TransactionPanel({
           <ul className="info-notice-list">
             <li className="info-notice-item">
               <span className="info-notice-bullet">•</span>
-              <span><strong>Demo Balance:</strong> The {balance} SOL shown is for demonstration only</span>
+              <span><strong>Real Balance:</strong> The balance shown is fetched from the blockchain</span>
             </li>
             <li className="info-notice-item">
               <span className="info-notice-bullet">•</span>
-              <span><strong>Real Transactions:</strong> You need to fund your smart wallet with real devnet SOL</span>
+              <span><strong>Gasless Transactions:</strong> You don't pay network fees - the paymaster does!</span>
             </li>
             <li className="info-notice-item">
               <span className="info-notice-bullet">•</span>
