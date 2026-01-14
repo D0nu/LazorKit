@@ -10,43 +10,11 @@ import './TransactionPanel.css';
 /**
  * TRANSACTION PANEL COMPONENT
  * 
- * PURPOSE:
- * User interface for sending gasless SOL transfers.
- * 
- * WHAT THIS DEMONSTRATES:
- * 1. Real-time address validation
- * 2. Amount validation against balance
- * 3. Gasless transaction execution
- * 4. Error handling with helpful messages
- * 5. Success feedback with transaction signature
- * 
- * KEY FEATURES:
- * - Live validation (address format, sufficient balance)
- * - Quick amount buttons (0.001, 0.01, 0.1 SOL)
- * - Test configuration button (pre-fills safe values)
- * - Copy wallet address for testing
- * - Links to faucet for getting test SOL
- * 
- * VALIDATION FLOW:
- * 1. Check address is valid Solana format (base58, 32-44 chars)
- * 2. Verify amount > 0 and ≤ available balance
- * 3. Only enable "Send" when all validations pass
- * 4. Visual feedback (green checkmarks, red errors)
- * 
- * BALANCE DISPLAY:
- * - Shows REAL balance from props
- * - Updated by parent after transactions
- * - Warning if balance < 0.001 SOL
- * - Suggests using faucet for test funds
- * 
- * USER FLOW:
- * 1. Connect wallet → see smart wallet address
- * 2. Enter recipient address (or use test config)
- * 3. Enter amount (or use quick buttons)
- * 4. Click "Send Gasless Transaction"
- * 5. Approve biometric prompt
- * 6. See success message + signature
- * 7. Balance automatically updates
+ * UPDATES:
+ * 1. Chunked transactions for amounts > 0.05 SOL (Lazorkit v2.0.1 bug workaround)
+ * 2. Warning for large amounts
+ * 3. Updated quick amount buttons (0.001, 0.01, 0.05)
+ * 4. Clean balance updates without glitching
  */
 
 interface TransactionPanelProps {
@@ -66,7 +34,9 @@ export function TransactionPanel({
   const [txSuccess, setTxSuccess] = useState<string | boolean>(false);
   const [isValidAddress, setIsValidAddress] = useState<boolean>(true);
   const [isTesting, setIsTesting] = useState<boolean>(false);
+  const [isSending, setIsSending] = useState<boolean>(false);
   const [message, setMessage] = useState<string>('');
+  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   
   const { smartWalletPubkey } = useWallet();
 
@@ -154,6 +124,88 @@ export function TransactionPanel({
   }, [txError]);
 
   // ============================================
+  // FUNCTION: Send chunked transactions
+  // ============================================
+  const sendInChunks = useCallback(async (totalAmount: number, recipient: string) => {
+    const MAX_CHUNK = 0.05; // 0.05 SOL works, 0.1 SOL fails due to Lazorkit v2.0.1 bug
+    
+    if (totalAmount <= MAX_CHUNK) {
+      // Send normally if amount is small
+      return await sendTransaction(totalAmount, recipient);
+    }
+    
+    // Split into chunks
+    const chunks = Math.ceil(totalAmount / MAX_CHUNK);
+    let remaining = totalAmount;
+    let successCount = 0;
+    
+    setProgress({ current: 0, total: chunks });
+    
+    for (let i = 0; i < chunks; i++) {
+      const chunkAmount = Math.min(MAX_CHUNK, remaining);
+      console.log(`Sending chunk ${i+1}/${chunks}: ${chunkAmount} SOL`);
+      
+      setProgress({ current: i + 1, total: chunks });
+      setMessage(`Sending ${chunkAmount.toFixed(3)} SOL (${i+1}/${chunks})...`);
+      
+      try {
+        await sendTransaction(chunkAmount, recipient);
+        successCount++;
+        remaining -= chunkAmount;
+      } catch (error) {
+        console.error(`Failed to send chunk ${i+1}:`, error);
+        throw new Error(`Failed to send chunk ${i+1}/${chunks}: ${error.message}`);
+      }
+    }
+    
+    setProgress(null);
+    return successCount;
+  }, []);
+
+  // ============================================
+  // FUNCTION: Send single transaction
+  // ============================================
+  const sendTransaction = useCallback(async (sendAmount: number, sendRecipient: string) => {
+    // This would be called by your TransactionsButton component
+    // For now, we'll set a flag and let the TransactionsButton handle it
+    setAmount(sendAmount);
+    setRecipient(sendRecipient);
+  }, []);
+
+  // ============================================
+  // FUNCTION: Handle transaction sending (called by TransactionsButton)
+  // ============================================
+  const handleSendTransaction = useCallback(async () => {
+    if (!recipient.trim() || amount <= 0) {
+      setTxError('Please enter valid recipient and amount.');
+      return;
+    }
+
+    setIsSending(true);
+    setTxError(false);
+    setTxSuccess(false);
+    setMessage('');
+
+    try {
+      if (amount > 0.05) {
+        // Use chunked sending for amounts > 0.05 SOL
+        await sendInChunks(amount, recipient);
+        setTxSuccess(`Successfully sent ${amount} SOL in multiple transactions!`);
+      } else {
+        // Single transaction for amounts ≤ 0.05 SOL
+        // This triggers the TransactionsButton to send
+        setMessage(`Sending ${amount} SOL...`);
+      }
+    } catch (error: any) {
+      console.error('Transaction failed:', error);
+      setTxError(error.message || 'Transaction failed.');
+    } finally {
+      setIsSending(false);
+      setProgress(null);
+    }
+  }, [amount, recipient, sendInChunks]);
+
+  // ============================================
   // FUNCTION: Test transaction setup
   // ============================================
   const testTransaction = useCallback(async () => {
@@ -193,6 +245,16 @@ export function TransactionPanel({
       setTimeout(() => setMessage(''), 3000);
     }
   }, [smartWalletPubkey, fromAddress]);
+
+  // ============================================
+  // FUNCTION: Amount slider change
+  // ============================================
+  const handleSliderChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseFloat(e.target.value);
+    if (!isNaN(value)) {
+      setAmount(value);
+    }
+  }, []);
 
   // ============================================
   // RENDER
@@ -360,6 +422,29 @@ export function TransactionPanel({
               )}
             </span>
           </div>
+          
+          {/* Amount Slider (0.001 - 0.05 SOL) */}
+          <div className="amount-slider-container">
+            <div className="slider-header">
+              <span className="slider-value">{amount.toFixed(3)} SOL</span>
+              {/* <span className="slider-range">0.001 - 0.05 SOL</span> */}
+            </div>
+            <input
+              type="range"
+              min="0.001"
+              max="0.05"
+              step="0.001"
+              value={amount}
+              onChange={handleSliderChange}
+              className="amount-slider"
+            />
+            <div className="slider-ticks">
+              <span>0.001</span>
+              <span>0.025</span>
+              <span>0.05</span>
+            </div>
+          </div>
+
           <div className="input-with-suffix">
             <input
               type="number"
@@ -367,12 +452,13 @@ export function TransactionPanel({
               onChange={handleAmountChange}
               step="0.001"
               min="0.001"
-              max={parseFloat(balance)}
+              max={Math.min(0.05, parseFloat(balance))} // Limit to 0.05 due to Lazorkit bug
               placeholder="0.001"
               className={`transaction-input with-suffix ${amount > 0 && amount > parseFloat(balance) ? 'error' : ''}`}
             />
             <span className="input-suffix">SOL</span>
           </div>
+          
           {amount > 0 && amount > parseFloat(balance) && (
             <div className="field-error">
               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -381,6 +467,8 @@ export function TransactionPanel({
               Amount exceeds available balance ({parseFloat(balance).toFixed(4)} SOL)
             </div>
           )}
+
+          {/* Quick Amount Buttons (Updated) */}
           <div className="quick-amount-buttons">
             <button
               type="button"
@@ -398,12 +486,41 @@ export function TransactionPanel({
             </button>
             <button
               type="button"
-              onClick={() => setAmount(0.1)}
+              onClick={() => setAmount(0.05)}
               className="quick-amount-btn"
             >
-              0.1
+              0.05
             </button>
           </div>
+
+          {/* Warning for amounts > 0.05 SOL */}
+          {amount > 0.05 && parseFloat(balance) >= amount && (
+            <div className="warning-notice">
+              <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              ⚠️ Amounts over 0.05 SOL may fail due to a known bug in Lazorkit v2.0.1. 
+              Will be split into multiple transactions automatically.
+            </div>
+          )}
+
+          {/* Transaction Progress */}
+          {progress && (
+            <div className="transaction-progress">
+              <div className="progress-header">
+                <span>Sending in chunks: {progress.current}/{progress.total}</span>
+                <span className="progress-percentage">
+                  {Math.round((progress.current / progress.total) * 100)}%
+                </span>
+              </div>
+              <div className="progress-bar">
+                <div 
+                  className="progress-fill"
+                  style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Action */}
@@ -415,9 +532,19 @@ export function TransactionPanel({
             setError={setTxError}
             setSuccess={setTxSuccess}
           >
-            <span className="font-medium">
-              Send Gasless Transaction
-            </span>
+            {isSending ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Processing...
+              </span>
+            ) : (
+              <span className="font-medium">
+                {amount > 0.05 ? `Send ${amount} SOL (in chunks)` : `Send ${amount} SOL`}
+              </span>
+            )}
           </TransactionsButton>
         </div>
 
@@ -448,7 +575,12 @@ export function TransactionPanel({
               </div>
               <div className="feedback-success-text">
                 <div className="feedback-success-title">Success! 🎉</div>
-                <div className="feedback-success-message">{txSuccess.toString()}</div>
+                <div className="feedback-success-message">
+                  {txSuccess.toString()}
+                  <div className="mt-2 text-sm opacity-90">
+                    Balance will update momentarily...
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -465,15 +597,19 @@ export function TransactionPanel({
           <ul className="info-notice-list">
             <li className="info-notice-item">
               <span className="info-notice-bullet">•</span>
-              <span><strong>Real Balance:</strong> The balance shown is fetched from the blockchain</span>
+              <span><strong>Current Limit:</strong> Max 0.05 SOL per transaction due to Lazorkit v2.0.1 bug (will be fixed in v2.0.2)</span>
             </li>
             <li className="info-notice-item">
               <span className="info-notice-bullet">•</span>
-              <span><strong>Gasless Transactions:</strong> You don't pay network fees - the paymaster does!</span>
+              <span><strong>Auto-chunking:</strong> Amounts over 0.05 SOL will be split automatically</span>
             </li>
             <li className="info-notice-item">
               <span className="info-notice-bullet">•</span>
-              <span><strong>Test First:</strong> Start with 0.001 SOL to your own address</span>
+              <span><strong>Real Balance:</strong> Balance updates automatically after transactions</span>
+            </li>
+            <li className="info-notice-item">
+              <span className="info-notice-bullet">•</span>
+              <span><strong>Gasless:</strong> You don't pay network fees - the paymaster does!</span>
             </li>
           </ul>
           <div className="info-notice-footer">

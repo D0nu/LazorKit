@@ -672,3 +672,312 @@
     margin-bottom: 24px;
   }
 }
+
+/* ===================================
+   AMOUNT SLIDER
+   =================================== */
+.amount-slider-container {
+  margin-top: 16px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  border-radius: 10px;
+}
+
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.slider-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #c084fc;
+  background: rgba(168, 85, 247, 0.1);
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.slider-range {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.amount-slider {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right, #a855f7, #6366f1);
+  border-radius: 4px;
+  outline: none;
+  margin: 8px 0;
+  cursor: pointer;
+}
+
+.amount-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #a855f7;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.4);
+  transition: all 0.2s ease;
+}
+
+.amount-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.6);
+}
+
+.amount-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #a855f7;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(168, 85, 247, 0.4);
+  transition: all 0.2s ease;
+}
+
+.amount-slider::-moz-range-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(168, 85, 247, 0.6);
+}
+
+.slider-ticks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding: 0 2px;
+}
+
+.slider-ticks span {
+  font-size: 11px;
+  color: #64748b;
+  position: relative;
+  padding-top: 20px;
+}
+
+.slider-ticks span::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  height: 12px;
+  background: rgba(148, 163, 184, 0.3);
+}
+
+/* ===================================
+   WARNING NOTICE
+   =================================== */
+.warning-notice {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #fbbf24;
+  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  animation: slideIn 0.3s ease-out;
+}
+
+.warning-notice svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* ===================================
+   TRANSACTION PROGRESS
+   =================================== */
+.transaction-progress {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 10px;
+  animation: slideIn 0.3s ease-out;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #93c5fd;
+}
+
+.progress-percentage {
+  font-weight: 600;
+  color: #60a5fa;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(59, 130, 246, 0.2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #60a5fa, #3b82f6);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+/* ===================================
+   RESPONSIVE STYLES
+   =================================== */
+@media (min-width: 640px) {
+  .amount-slider-container {
+    padding: 16px 20px;
+  }
+  
+  .slider-value {
+    font-size: 18px;
+    padding: 8px 14px;
+  }
+  
+  .slider-range {
+    font-size: 13px;
+  }
+  
+  .amount-slider {
+    height: 8px;
+  }
+  
+  .amount-slider::-webkit-slider-thumb {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .amount-slider::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .slider-ticks span {
+    font-size: 12px;
+  }
+  
+  .warning-notice {
+    font-size: 13px;
+    padding: 14px 16px;
+  }
+  
+  .warning-notice svg {
+    width: 18px;
+    height: 18px;
+  }
+  
+  .transaction-progress {
+    padding: 16px 20px;
+  }
+  
+  .progress-header {
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 768px) {
+  .slider-value {
+    font-size: 20px;
+  }
+  
+  .slider-range {
+    font-size: 14px;
+  }
+  
+  .warning-notice {
+    font-size: 14px;
+  }
+}
+
+/* ===================================
+   DARK MODE ENHANCEMENTS
+   =================================== */
+@media (prefers-color-scheme: dark) {
+  .amount-slider-container {
+    background: rgba(30, 41, 59, 0.6);
+    border-color: rgba(168, 85, 247, 0.3);
+  }
+  
+  .slider-value {
+    background: rgba(168, 85, 247, 0.15);
+    border-color: rgba(168, 85, 247, 0.4);
+  }
+  
+  .amount-slider {
+    background: linear-gradient(to right, #9333ea, #4f46e5);
+  }
+  
+  .amount-slider::-webkit-slider-thumb {
+    background: #f8fafc;
+    border-color: #9333ea;
+  }
+  
+  .warning-notice {
+    background: rgba(251, 191, 36, 0.15);
+    border-color: rgba(251, 191, 36, 0.4);
+  }
+  
+  .transaction-progress {
+    background: rgba(30, 41, 59, 0.6);
+    border-color: rgba(59, 130, 246, 0.4);
+  }
+  
+  .progress-bar {
+    background: rgba(59, 130, 246, 0.3);
+  }
+}
+
+/* ===================================
+   ANIMATIONS
+   =================================== */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.warning-notice {
+  animation: slideIn 0.3s ease-out, pulse 2s ease-in-out infinite;
+}
+
+/* ===================================
+   ACCESSIBILITY
+   =================================== */
+.amount-slider:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.3);
+}
+
+.amount-slider:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.5);
+}
+
+.amount-slider:focus::-moz-range-thumb {
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.5);
+}
