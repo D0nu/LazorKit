@@ -37,3 +37,8 @@ dist/
 build/
 .next/
 out/
+
+# Certificate directories
+ssl/
+certificates/
+keys/
