@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { LazorkitProvider, registerLazorkitWallet } from '@lazorkit/wallet';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
@@ -56,6 +56,9 @@ const config = {
   },
 };
 
+
+let isWalletInitialized = false;
+
 /**
  * LAZORKIT CONTEXT PROVIDER
  * 
@@ -74,6 +77,7 @@ const config = {
  * - Child components can access wallet features via hooks
  */
 export function LazorKitContext({ children }: { children: React.ReactNode }) {
+  const [isReady, setIsReady] = useState(isWalletInitialized);
   
   /**
    * INITIALIZATION EFFECT
@@ -85,51 +89,37 @@ export function LazorKitContext({ children }: { children: React.ReactNode }) {
    * - Next.js apps render on both server and browser, but wallet features
    *   only work in the browser
    */
-  useEffect(() => {
-    // Check if we're in the browser environment
-    // 'window' is only available in browsers, not on servers
-    if (typeof window !== 'undefined') {
-      
-      /**
-       * ✅ BUFFER POLYFILL FIX (CRITICAL)
-       * 
-       * WHY WE NEED THIS:
-       * - Solana's web3.js library uses Node.js's Buffer
-       * - Browsers don't have Buffer natively
-       * - This line ensures Buffer is available in the browser
-       * - Without this, you'll get "Buffer is not defined" errors
-       * 
-       * NOTE: We imported Buffer at the top of this file
-       */
-      window.Buffer = window.Buffer || Buffer;
-
-      /**
-       * REGISTER LAZORKIT WALLET
-       * 
-       * This is the MOST IMPORTANT initialization step.
-       * 
-       * WHAT IT DOES:
-       * - Tells Solana's wallet adapter system about Lazorkit
-       * - Configures passkey authentication
-       * - Sets up the gasless transaction infrastructure
-       * - Connects to the correct Solana network (devnet)
-       * 
-       * PARAMETERS EXPLAINED:
-       * - rpcUrl: Where to read/write blockchain data (Solana's official devnet)
-       * - portalUrl: Where passkeys are managed (Lazorkit's auth server)
-       * - paymasterConfig: How gasless transactions are handled (Lazorkit's paymaster)
-       * - clusterSimulation: Which Solana network (devnet = test network)
-       * 
-       * NOTE: For production, change 'devnet' to 'mainnet-beta' and update URLs
-       */
-      registerLazorkitWallet({
-        rpcUrl: config.RPC_URL, 
-        portalUrl: config.PORTAL_URL,
-        paymasterConfig: config.PAYMASTER,
-        clusterSimulation: 'devnet', // Use 'mainnet-beta' for production
-      });
+    useEffect(() => {
+   
+    if (isWalletInitialized) {
+      setIsReady(true);
+      return;
     }
-  }, []); // Empty dependency array = run only once on mount
+    
+  
+    const init = () => {
+      try {
+        registerLazorkitWallet({
+          rpcUrl: config.RPC_URL, 
+          portalUrl: config.PORTAL_URL,
+          paymasterConfig: config.PAYMASTER,
+          clusterSimulation: 'devnet',
+        });
+        isWalletInitialized = true;
+        setIsReady(true);
+      } catch (error) {
+        console.error('Wallet init failed:', error);
+        setIsReady(true); 
+      }
+    };
+    
+    
+    if ('requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(init, { timeout: 500 });
+    } else {
+      setTimeout(init, 0); // Next tick
+    }
+  }, []);
 
   /**
    * WALLET ADAPTERS ARRAY
@@ -181,6 +171,12 @@ export function LazorKitContext({ children }: { children: React.ReactNode }) {
    * - Connection must exist before wallets can connect
    * - Wallet state must exist before UI can display it
    */
+
+   if (!isReady) {
+    return null; 
+  }
+
+
   return (
     <ConnectionProvider endpoint={config.RPC_URL}>
       <LazorkitProvider

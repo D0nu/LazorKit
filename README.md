@@ -217,7 +217,7 @@ npm run lint
 
 ## 🌐 Live Demo
 
-**Live Application**: [your-demo-url.vercel.app](https://your-demo-url.vercel.app)
+**Live Application**: [(https://lazor-kit-two.vercel.app/)]
 
 Try these features:
 1. Sign in with your device's biometric authentication
@@ -317,6 +317,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Built with ❤️ for the Lazorkit Bounty Program**
 
-[⭐ Star this repo](https://github.com/yourusername/lazorkit-demo) | [🐛 Report Bug](https://github.com/yourusername/lazorkit-demo/issues) | [💡 Request Feature](https://github.com/yourusername/lazorkit-demo/issues)
-
+[⭐ Star this repo](https://github.com/D0nu/lazorkit.git) 
 </div>

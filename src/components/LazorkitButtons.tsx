@@ -1,5 +1,5 @@
 'use client';
-import { SetStateAction } from 'react';
+import { SetStateAction, useEffect } from 'react';
 import { useWallet } from '@lazorkit/wallet';
 import { 
   SystemProgram, 
@@ -362,6 +362,44 @@ export const AuthButton = ({ classes = '' }: { classes?: string }) => {
     isConnecting,
     smartWalletPubkey
   } = useWallet();
+
+  useEffect(() => {
+    if (!isConnected && !isConnecting) {
+      // Quick check - don't auto-reconnect, just check
+      const hasSession = localStorage.getItem('lazorkit_session');
+      if (hasSession) {
+        console.log('Previous session found - user can click to reconnect');
+      }
+    }
+  }, [isConnected, isConnecting]);
+
+   useEffect(() => {
+    if (isConnected) {
+      localStorage.setItem('lazorkit_session', 'active');
+    }
+  }, [isConnected]);
+
+  const handleConnect = async () => {
+    try {
+      await connect({ feeMode: 'paymaster' });
+    } catch (error) {
+      localStorage.removeItem('lazorkit_session');
+    }
+  };
+  
+  const handleDisconnect = async () => {
+    await disconnect();
+    localStorage.removeItem('lazorkit_session');
+  };
+  
+  // Simple rendering - no complex logic
+  if (isConnecting) {
+    return (
+      <button className={classes} disabled>
+        Signing in...
+      </button>
+    );
+  }
   
   /**
    * COPY ADDRESS HELPER
