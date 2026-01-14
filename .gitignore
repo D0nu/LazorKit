@@ -42,3 +42,9 @@ out/
 ssl/
 certificates/
 keys/
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+
+# Next.js
+ext-env.d.ts
