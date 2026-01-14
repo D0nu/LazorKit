@@ -55,6 +55,25 @@ export default function Home() {
   }, []); // Empty dependency array - run once
 
   // ============================================
+  // EFFECT: Close mobile menu when clicking outside
+  // ============================================
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+        setMobileMenuOpen(false);
+      }
+    };
+
+    if (mobileMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [mobileMenuOpen]);
+
+  // ============================================
   // FUNCTION: Fetch wallet balance
   // ============================================
   const fetchBalance = async (address: string) => {
@@ -148,6 +167,13 @@ export default function Home() {
   // ============================================
   const closeMobileMenu = () => {
     setMobileMenuOpen(false);
+  };
+
+  // ============================================
+  // FUNCTION: Toggle mobile menu (with proper close logic)
+  // ============================================
+  const toggleMobileMenu = () => {
+    setMobileMenuOpen(prev => !prev);
   };
 
   // ============================================
@@ -270,8 +296,8 @@ export default function Home() {
             {/* Mobile Menu Button - shown only on mobile */}
             <button 
               className="mobile-menu-btn"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              aria-label="Toggle menu"
+              onClick={toggleMobileMenu} 
+              aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
               aria-expanded={mobileMenuOpen}
             >
               {mobileMenuOpen ? (
@@ -340,6 +366,11 @@ export default function Home() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
             </a>
+            
+            {/* AUTH BUTTON IN MOBILE MENU - NOW ADDED */}
+            <div className="mobile-menu-auth mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <AuthButton classes='btn btn-primary w-full' />
+            </div>
           </div>
           
           <div className="mt-auto pt-8">

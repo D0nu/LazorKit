@@ -80,6 +80,7 @@ Navigate to [http://localhost:3000](http://localhost:3000) to see the app in act
 lazorkit-demo/
 ├── app/
 │   ├── layout.tsx              # Root layout with LazorKitContext provider
+|   ├── Docs/[slug]/page.tsx    # to giva a view of our tutorials
 │   ├── page.tsx                # Main application page
 │   └── globals.css             # Global styles and animations
 ├── components/

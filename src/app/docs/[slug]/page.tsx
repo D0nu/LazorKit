@@ -12,12 +12,13 @@ interface DocPageProps {
   };
 }
 
-// This generates static paths at build time
+
 export async function generateStaticParams() {
   const docsDir = path.join(process.cwd(), 'src', 'docs');
   
   // Check if directory exists
   if (!fs.existsSync(docsDir)) {
+    console.error('Docs directory not found:', docsDir);
     return [];
   }
   
@@ -34,6 +35,8 @@ export default async function DocPage({ params }: DocPageProps) {
   const { slug } = params;
   const filePath = path.join(process.cwd(), 'src', 'docs', `${slug}.md`);
   
+  console.log('Looking for file:', filePath); // Debug log
+  
   // Handle file not found
   if (!fs.existsSync(filePath)) {
     return (
@@ -43,8 +46,11 @@ export default async function DocPage({ params }: DocPageProps) {
           <p className="text-gray-400 mb-8">
             The documentation page you're looking for doesn't exist.
           </p>
-          <a href="/docs" className="btn btn-primary">
-            Back to Documentation
+          <p className="text-gray-500 mb-4">
+            Looking for: {slug}.md
+          </p>
+          <a href="/" className="btn btn-primary">
+            Back to Home
           </a>
         </div>
       </div>
@@ -60,13 +66,13 @@ export default async function DocPage({ params }: DocPageProps) {
         {/* Header */}
         <div className="mb-8">
           <a 
-            href="/docs" 
+            href="/" 
             className="inline-flex items-center gap-2 text-purple-400 hover:text-purple-300 transition mb-4"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
-            Back to Documentation
+            Back to Home
           </a>
           
           {frontmatter.title && (
@@ -113,10 +119,10 @@ export default async function DocPage({ params }: DocPageProps) {
         <div className="mt-12 pt-8 border-t border-gray-700">
           <div className="flex justify-between items-center">
             <a 
-              href="/docs"
+              href="/"
               className="btn btn-secondary"
             >
-              All Documentation
+              Back to Home
             </a>
             
             <a 
