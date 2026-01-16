@@ -190,7 +190,7 @@ export function TransactionsButton({
           from: smartWalletPubkey.toString(),
           to: destination.toString(),
           amount: amount,
-          lamports: Math.floor(amount * LAMPORTS_PER_SOL),
+          lamports: Math.round(amount * LAMPORTS_PER_SOL), // ✅ FIXED: Using Math.round instead of Math.floor
           format: 'Using Lazorkit SDK with versioned transactions'
         });
 
@@ -199,11 +199,17 @@ export function TransactionsButton({
          * 
          * This is the core instruction that tells Solana:
          * "Transfer X lamports from sender to recipient"
+         * 
+         * ✅ CRITICAL FIX: Changed Math.floor to Math.round
+         * Why: Floating point precision issues with JavaScript.
+         * Example: 0.01 * 1_000_000_000 = 9,999,999.999999999
+         * Math.floor(9,999,999.999999999) = 9,999,999 (WRONG - 1 lamport short!)
+         * Math.round(9,999,999.999999999) = 10,000,000 (CORRECT - exact amount!)
          */
         const instruction = SystemProgram.transfer({
           fromPubkey: smartWalletPubkey,
           toPubkey: destination,
-          lamports: Math.floor(amount * LAMPORTS_PER_SOL)
+          lamports: Math.round(amount * LAMPORTS_PER_SOL) // ✅ FIXED: Math.floor → Math.round
         });
 
         /**
@@ -256,11 +262,11 @@ export function TransactionsButton({
           console.log('⚠️ Versioned transaction failed, trying legacy format...');
           
           try {
-            // Create instruction again for fallback
+            // Create instruction again for fallback (with same fix)
             const instruction = SystemProgram.transfer({
               fromPubkey: smartWalletPubkey,
               toPubkey: destination,
-              lamports: Math.floor(amount * LAMPORTS_PER_SOL)
+              lamports: Math.round(amount * LAMPORTS_PER_SOL) // ✅ FIXED: Same fix in fallback
             });
             
             // Try with legacy transaction format

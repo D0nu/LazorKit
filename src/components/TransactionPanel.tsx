@@ -7,26 +7,20 @@ import { useWallet } from '@lazorkit/wallet';
 import '../app/globals.css';
 import './TransactionPanel.css';
 
-/**
- * TRANSACTION PANEL COMPONENT
- * 
- * UPDATES:
- * 1. Chunked transactions for amounts > 0.05 SOL (Lazorkit v2.0.1 bug workaround)
- * 2. Warning for large amounts
- * 3. Updated quick amount buttons (0.001, 0.01, 0.05)
- * 4. Clean balance updates without glitching
- */
-
 interface TransactionPanelProps {
   fromAddress?: string;
   balance?: string;
   onTransactionComplete?: () => void;
+  isRefreshingBalance?: boolean;
+  onRefreshBalance?: () => void;
 }
 
 export function TransactionPanel({
   fromAddress,
   balance = '0',
   onTransactionComplete,
+  isRefreshingBalance = false,
+  onRefreshBalance,
 }: TransactionPanelProps) {
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState<number>(0.001);
@@ -40,19 +34,14 @@ export function TransactionPanel({
   
   const { smartWalletPubkey } = useWallet();
 
-  // ============================================
-  // EFFECT: Initialize with own address
-  // ============================================
+  // Initialize with empty recipient - user can input any address
   useEffect(() => {
-    if (smartWalletPubkey) {
-      setRecipient(smartWalletPubkey.toString());
-      setIsValidAddress(true);
+    // Only set if user hasn't typed anything yet
+    if (smartWalletPubkey && recipient === '') {
+      setRecipient('');
     }
   }, [smartWalletPubkey]);
 
-  // ============================================
-  // FUNCTION: Validate Solana address
-  // ============================================
   const validateSolanaAddress = useCallback((address: string): boolean => {
     if (!address.trim()) return false;
     try {
@@ -124,88 +113,6 @@ export function TransactionPanel({
   }, [txError]);
 
   // ============================================
-  // FUNCTION: Send chunked transactions
-  // ============================================
-  const sendInChunks = useCallback(async (totalAmount: number, recipient: string) => {
-    const MAX_CHUNK = 0.05; // 0.05 SOL works, 0.1 SOL fails due to Lazorkit v2.0.1 bug
-    
-    if (totalAmount <= MAX_CHUNK) {
-      // Send normally if amount is small
-      return await sendTransaction(totalAmount, recipient);
-    }
-    
-    // Split into chunks
-    const chunks = Math.ceil(totalAmount / MAX_CHUNK);
-    let remaining = totalAmount;
-    let successCount = 0;
-    
-    setProgress({ current: 0, total: chunks });
-    
-    for (let i = 0; i < chunks; i++) {
-      const chunkAmount = Math.min(MAX_CHUNK, remaining);
-      console.log(`Sending chunk ${i+1}/${chunks}: ${chunkAmount} SOL`);
-      
-      setProgress({ current: i + 1, total: chunks });
-      setMessage(`Sending ${chunkAmount.toFixed(3)} SOL (${i+1}/${chunks})...`);
-      
-      try {
-        await sendTransaction(chunkAmount, recipient);
-        successCount++;
-        remaining -= chunkAmount;
-      } catch (error) {
-        console.error(`Failed to send chunk ${i+1}:`, error);
-        throw new Error(`Failed to send chunk ${i+1}/${chunks}: ${error.message}`);
-      }
-    }
-    
-    setProgress(null);
-    return successCount;
-  }, []);
-
-  // ============================================
-  // FUNCTION: Send single transaction
-  // ============================================
-  const sendTransaction = useCallback(async (sendAmount: number, sendRecipient: string) => {
-    // This would be called by your TransactionsButton component
-    // For now, we'll set a flag and let the TransactionsButton handle it
-    setAmount(sendAmount);
-    setRecipient(sendRecipient);
-  }, []);
-
-  // ============================================
-  // FUNCTION: Handle transaction sending (called by TransactionsButton)
-  // ============================================
-  const handleSendTransaction = useCallback(async () => {
-    if (!recipient.trim() || amount <= 0) {
-      setTxError('Please enter valid recipient and amount.');
-      return;
-    }
-
-    setIsSending(true);
-    setTxError(false);
-    setTxSuccess(false);
-    setMessage('');
-
-    try {
-      if (amount > 0.05) {
-        // Use chunked sending for amounts > 0.05 SOL
-        await sendInChunks(amount, recipient);
-        setTxSuccess(`Successfully sent ${amount} SOL in multiple transactions!`);
-      } else {
-        // Single transaction for amounts ≤ 0.05 SOL
-        // This triggers the TransactionsButton to send
-        setMessage(`Sending ${amount} SOL...`);
-      }
-    } catch (error: any) {
-      console.error('Transaction failed:', error);
-      setTxError(error.message || 'Transaction failed.');
-    } finally {
-      setIsSending(false);
-      setProgress(null);
-    }
-  }, [amount, recipient, sendInChunks]);
-
-  // ============================================
   // FUNCTION: Test transaction setup
   // ============================================
   const testTransaction = useCallback(async () => {
@@ -257,8 +164,16 @@ export function TransactionPanel({
   }, []);
 
   // ============================================
-  // RENDER
+  // FUNCTION: Refresh balance manually
   // ============================================
+  const handleRefreshBalance = useCallback(() => {
+    if (onRefreshBalance) {
+      onRefreshBalance();
+      setMessage('🔄 Refreshing balance...');
+      setTimeout(() => setMessage(''), 2000);
+    }
+  }, [onRefreshBalance]);
+
   return (
     <div className="glass-md rounded-xl p-6 sm:p-8">
       {/* Header */}
@@ -289,28 +204,48 @@ export function TransactionPanel({
                 Send SOL without paying gas fees
               </p>
             </div>
-            <button
-              onClick={testTransaction}
-              disabled={isTesting}
-              className="test-config-btn"
-            >
-              {isTesting ? (
-                <>
+            <div className="flex gap-2">
+              <button
+                onClick={testTransaction}
+                disabled={isTesting}
+                className="test-config-btn"
+              >
+                {isTesting ? (
+                  <>
+                    <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                    </svg>
+                    Test Config
+                  </>
+                )}
+              </button>
+              
+              {/* Balance Refresh Button */}
+              <button
+                onClick={handleRefreshBalance}
+                disabled={isRefreshingBalance}
+                className="refresh-balance-btn"
+              >
+                {isRefreshingBalance ? (
                   <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Loading...
-                </>
-              ) : (
-                <>
+                ) : (
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
-                  Test Config
-                </>
-              )}
-            </button>
+                )}
+              </button>
+            </div>
           </div>
 
           {smartWalletPubkey && (
@@ -330,27 +265,46 @@ export function TransactionPanel({
                 </div>
               </div>
               
-              {/* Balance Display */}
-              <div className="balance-info-card">
-                <div className="balance-row">
-                  <div className="balance-main">
-                    <div className="balance-label-text">Available Balance:</div>
-                    <div className="balance-amount-text">{balance} SOL</div>
-                    {parseFloat(balance) < 0.001 && (
-                      <div className="low-balance-warning">
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              <div className={`balance-info-card ${isRefreshingBalance ? 'is-refreshing' : ''}`}>
+              <div className="balance-row">
+                <div className="balance-main">
+                  <div className="balance-label-text">Available Balance:</div>
+                  <div className="flex items-center gap-2">
+                    <div className="balance-amount-text" title={`${balance} SOL`}>
+                      {balance} SOL
+                    </div>
+                    {isRefreshingBalance && (
+                      <div className="refresh-indicator" title="Updating...">
+                        <svg className="w-3 h-3 animate-spin text-blue-400" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        Low balance. Fund your wallet to send transactions.
                       </div>
                     )}
                   </div>
-                  <div className="balance-demo-label">
-                    <p>Real Balance</p>
-                    <p>From blockchain</p>
-                  </div>
+                  {parseFloat(balance) < 0.001 && (
+                    <div className="low-balance-warning">
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                      <span>Low balance. </span>
+                      <a 
+                        href="https://faucet.solana.com" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="underline hover:text-blue-400 ml-1"
+                      >
+                        Get test SOL from faucet →
+                      </a>
+                    </div>
+                  )}
+                </div>
+                <div className="balance-demo-label">
+                  <p>Live Balance</p>
+                  <p>Updates after transactions</p>
                 </div>
               </div>
+            </div>
             </div>
           )}
           
@@ -387,7 +341,7 @@ export function TransactionPanel({
             type="text"
             value={recipient}
             onChange={handleRecipientChange}
-            placeholder="Enter Solana address (base58)"
+            placeholder="Enter any Solana devnet address (base58)"
             className={`transaction-input ${!isValidAddress && recipient ? 'error' : ''}`}
           />
           {!isValidAddress && recipient && (
@@ -399,7 +353,7 @@ export function TransactionPanel({
             </div>
           )}
           <div className="field-hint">
-            Tip: Test by sending to your smart wallet address above
+            Tip: You can send to your own address above or any devnet address
           </div>
         </div>
 
@@ -427,7 +381,6 @@ export function TransactionPanel({
           <div className="amount-slider-container">
             <div className="slider-header">
               <span className="slider-value">{amount.toFixed(3)} SOL</span>
-              {/* <span className="slider-range">0.001 - 0.05 SOL</span> */}
             </div>
             <input
               type="range"
@@ -452,7 +405,7 @@ export function TransactionPanel({
               onChange={handleAmountChange}
               step="0.001"
               min="0.001"
-              max={Math.min(0.05, parseFloat(balance))} // Limit to 0.05 due to Lazorkit bug
+              max={Math.min(0.05, parseFloat(balance))}
               placeholder="0.001"
               className={`transaction-input with-suffix ${amount > 0 && amount > parseFloat(balance) ? 'error' : ''}`}
             />
@@ -464,11 +417,21 @@ export function TransactionPanel({
               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
               </svg>
-              Amount exceeds available balance ({parseFloat(balance).toFixed(4)} SOL)
+              <span>Amount exceeds available balance ({parseFloat(balance).toFixed(4)} SOL)</span>
+              {parseFloat(balance) < 0.01 && (
+                <a 
+                  href="https://faucet.solana.com" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="underline hover:text-blue-400 ml-2"
+                >
+                  Get test SOL →
+                </a>
+              )}
             </div>
           )}
 
-          {/* Quick Amount Buttons (Updated) */}
+          {/* Quick Amount Buttons */}
           <div className="quick-amount-buttons">
             <button
               type="button"
@@ -578,7 +541,8 @@ export function TransactionPanel({
                 <div className="feedback-success-message">
                   {txSuccess.toString()}
                   <div className="mt-2 text-sm opacity-90">
-                    Balance will update momentarily...
+                    Your balance will update in 2-5 seconds...
+                    {isRefreshingBalance && ' (refreshing now)'}
                   </div>
                 </div>
               </div>
@@ -586,7 +550,7 @@ export function TransactionPanel({
           </div>
         )}
 
-        {/* Important Notice */}
+        {/* Important Notice with Enhanced Faucet Info */}
         <div className="info-notice">
           <h4 className="info-notice-title">
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -597,7 +561,7 @@ export function TransactionPanel({
           <ul className="info-notice-list">
             <li className="info-notice-item">
               <span className="info-notice-bullet">•</span>
-              <span><strong>Current Limit:</strong> Max 0.05 SOL per transaction due to Lazorkit v2.0.1 bug (will be fixed in v2.0.2)</span>
+              <span><strong>Current Limit:</strong> Max 0.05 SOL per transaction due to Lazorkit v2.0.1 bug</span>
             </li>
             <li className="info-notice-item">
               <span className="info-notice-bullet">•</span>
@@ -605,25 +569,35 @@ export function TransactionPanel({
             </li>
             <li className="info-notice-item">
               <span className="info-notice-bullet">•</span>
-              <span><strong>Real Balance:</strong> Balance updates automatically after transactions</span>
+              <span><strong>Real Balance:</strong> Balance updates automatically after transactions (2-5 seconds)</span>
             </li>
             <li className="info-notice-item">
               <span className="info-notice-bullet">•</span>
-              <span><strong>Gasless:</strong> You don't pay network fees - the paymaster does!</span>
+              <span><strong>Need Test SOL?</strong> Use the faucet below</span>
             </li>
           </ul>
           <div className="info-notice-footer">
-            <a 
-              href="https://faucet.solana.com" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="faucet-link"
-            >
-              <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clipRule="evenodd" />
-              </svg>
-              Get Devnet SOL from Faucet
-            </a>
+            <div className="faucet-container">
+              <div className="faucet-info">
+                <svg className="w-4 h-4 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+                </svg>
+                <div>
+                  <h5 className="font-medium">Get Test SOL for Free</h5>
+                </div>
+              </div>
+              <a 
+                href="https://faucet.solana.com" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="faucet-link-button"
+              >
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clipRule="evenodd" />
+                </svg>
+                Open Solana Faucet
+              </a>
+            </div>
           </div>
         </div>
       </div>

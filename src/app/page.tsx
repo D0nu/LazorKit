@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useWallet } from '@lazorkit/wallet';
 import { Connection, PublicKey } from '@solana/web3.js';
 
@@ -13,10 +13,23 @@ import { WalletDashboard } from '../components/WalletDashboard';
 import { FeatureGrid } from '../components/FeatureGrid';
 import { TutorialSection } from '../components/TutorialSection';
 
+// ============================================
+// GLOBAL TYPE DECLARATION
+// ============================================
+declare global {
+  interface Window {
+    __balanceTimeouts: NodeJS.Timeout[];
+  }
+}
+
+// ============================================
+// INITIALIZE GLOBAL TIMEOUT ARRAY
+// ============================================
+if (typeof window !== 'undefined' && !window.__balanceTimeouts) {
+  window.__balanceTimeouts = [];
+}
 
 export default function Home() {
-
-  
   // Wallet connection state from Lazorkit
   const { isConnected, smartWalletPubkey } = useWallet();
   
@@ -42,6 +55,15 @@ export default function Home() {
   const hasFetchedRef = useRef(false);
   const fetchInProgressRef = useRef(false);
   const lastFetchedAddressRef = useRef<string>('');
+  const lastFetchTimeRef = useRef<number>(0);
+  const [isRefreshingBalance, setIsRefreshingBalance] = useState(false);
+  
+  // WebSocket subscription ref
+  const wsSubscriptionRef = useRef<number | null>(null);
+  
+  // Stable refs for connection and wallet
+  const connectionRef = useRef<Connection | null>(null);
+  const walletAddressRef = useRef<string>('');
 
   // ============================================
   // EFFECT: Initialize Solana connection (ONCE)
@@ -51,21 +73,45 @@ export default function Home() {
       console.log('🔗 Initializing Solana connection...');
       const conn = new Connection('https://api.devnet.solana.com', 'confirmed');
       setConnection(conn);
+      connectionRef.current = conn;
     }
-  }, []); // Empty dependency array - run once
+  }, []);
+
+  // ============================================
+  // EFFECT: Update wallet address ref when it changes
+  // ============================================
+  useEffect(() => {
+    if (smartWalletPubkey) {
+      walletAddressRef.current = smartWalletPubkey.toString();
+    } else {
+      walletAddressRef.current = '';
+    }
+  }, [smartWalletPubkey]);
 
   // ============================================
   // EFFECT: Close mobile menu when clicking outside
   // ============================================
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      
+      // Don't close if clicking the mobile menu button itself
+      const menuButton = document.querySelector('.mobile-menu-btn');
+      if (menuButton?.contains(target)) {
+        return;
+      }
+      
+      // Close if clicking outside the menu
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(target)) {
         setMobileMenuOpen(false);
       }
     };
 
     if (mobileMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
+      // Add a small delay to prevent immediate closure
+      setTimeout(() => {
+        document.addEventListener('mousedown', handleClickOutside);
+      }, 100);
     }
 
     return () => {
@@ -74,52 +120,157 @@ export default function Home() {
   }, [mobileMenuOpen]);
 
   // ============================================
-  // FUNCTION: Fetch wallet balance
+  // FUNCTION: Setup WebSocket subscription (STABLE)
   // ============================================
-  const fetchBalance = async (address: string) => {
-    // Prevent duplicate fetches
-    if (!connection || fetchInProgressRef.current || lastFetchedAddressRef.current === address) {
-      console.log('⏸️ Fetch skipped - already fetching or same address');
+  const setupWebSocket = useCallback(() => {
+    const conn = connectionRef.current;
+    const address = walletAddressRef.current;
+    
+    if (!conn || !address) {
+      console.log('⏸️ Skipping WebSocket setup - no connection or address');
+      return;
+    }
+    
+    // Clean up existing subscription first
+    if (wsSubscriptionRef.current !== null) {
+      console.log('🧹 Cleaning up existing WebSocket subscription...');
+      try {
+        conn.removeAccountChangeListener(wsSubscriptionRef.current);
+      } catch (error) {
+        console.log('Error removing existing subscription:', error);
+      }
+      wsSubscriptionRef.current = null;
+    }
+    
+    const pubkey = new PublicKey(address);
+    
+    console.log('📡 Setting up WebSocket subscription for:', address);
+    
+    const subscriptionId = conn.onAccountChange(
+      pubkey,
+      (accountInfo) => {
+        const newBalance = (accountInfo.lamports / 1000000000).toFixed(4);
+        console.log('🔔 WebSocket balance update:', newBalance, 'SOL');
+        setBalance(newBalance);
+        lastFetchTimeRef.current = Date.now();
+      },
+      'confirmed' 
+    );
+    
+    wsSubscriptionRef.current = subscriptionId;
+    console.log('✅ WebSocket subscription active:', subscriptionId);
+  }, []); // NO dependencies - uses refs only
+
+  // ============================================
+  // EFFECT: Manage WebSocket subscription
+  // ============================================
+  useEffect(() => {
+    const address = walletAddressRef.current;
+    const conn = connectionRef.current;
+    
+    if (!conn || !address) {
+      // Clean up if no connection or wallet
+      if (wsSubscriptionRef.current !== null) {
+        console.log('🧹 Cleaning up WebSocket - no wallet');
+        try {
+          conn?.removeAccountChangeListener(wsSubscriptionRef.current);
+        } catch (error) {
+          console.log('Error cleaning up WebSocket:', error);
+        }
+        wsSubscriptionRef.current = null;
+      }
+      return;
+    }
+    
+    // Only setup if we don't have an active subscription
+    if (wsSubscriptionRef.current === null) {
+      setupWebSocket();
+    }
+    
+    // Cleanup function
+    return () => {
+      if (wsSubscriptionRef.current !== null) {
+        console.log('🧹 Component unmounting - cleaning up WebSocket');
+        try {
+          conn.removeAccountChangeListener(wsSubscriptionRef.current);
+        } catch (error) {
+          console.log('Error cleaning up on unmount:', error);
+        }
+        wsSubscriptionRef.current = null;
+      }
+    };
+  }, [isConnected, setupWebSocket]); // Only depend on connection status, not wallet pubkey
+
+  // ============================================
+  // FUNCTION: Fetch wallet balance (Memoized)
+  // ============================================
+  const fetchBalance = useCallback(async (address: string, forceRefresh = false) => {
+    const conn = connectionRef.current;
+    
+    // Don't fetch if no connection
+    if (!conn) {
+      console.log('❌ No connection available');
+      return;
+    }
+    
+    // Check if we're already fetching (debounce)
+    if (fetchInProgressRef.current && !forceRefresh) {
+      console.log('⏸️ Fetch skipped - already in progress');
+      return;
+    }
+    
+    // Debounce non-forced requests (1 second minimum between fetches)
+    const now = Date.now();
+    const timeSinceLastFetch = now - lastFetchTimeRef.current;
+    
+    if (!forceRefresh && timeSinceLastFetch < 1000) {
+      console.log('⏸️ Fetch skipped - fetched recently (within 1 second)');
       return;
     }
     
     console.log('🔄 Fetching balance for:', address);
     fetchInProgressRef.current = true;
-    lastFetchedAddressRef.current = address;
-    setIsLoading(true);
+    setIsRefreshingBalance(true);
     
     try {
       const pubkey = new PublicKey(address);
-      
-      // Get balance in lamports, then convert to SOL
-      const balanceInLamports = await connection.getBalance(pubkey);
+      const balanceInLamports = await conn.getBalance(pubkey);
       const solBalance = (balanceInLamports / 1000000000).toFixed(4);
       
       console.log('✅ Balance fetched:', solBalance, 'SOL');
       setBalance(solBalance);
+      lastFetchTimeRef.current = Date.now();
       hasFetchedRef.current = true;
+      lastFetchedAddressRef.current = address;
     } catch (error) {
       console.error('❌ Error fetching balance:', error);
-      setBalance('0.0000');
+      // Don't set to 0 on error - keep previous balance
     } finally {
-      setIsLoading(false);
-      fetchInProgressRef.current = false;
+      // Delay the loading state removal to prevent UI flicker
+      setTimeout(() => {
+        setIsRefreshingBalance(false);
+        fetchInProgressRef.current = false;
+      }, 500);
     }
-  };
+  }, []); // No dependencies - uses refs only
 
- 
+  // ============================================
+  // EFFECT: Auto-fetch balance when wallet connects
+  // ============================================
   useEffect(() => {
     let mounted = true;
+    let fetchTimeout: NodeJS.Timeout;
     
     const fetchIfNeeded = async () => {
       if (!mounted) return;
       
       if (isConnected && smartWalletPubkey && connection && !hasFetchedRef.current) {
         const address = smartWalletPubkey.toString();
-        console.log('🔑 Wallet connected, address:', address);
+        console.log('🔑 Wallet connected, fetching balance for:', address);
         await fetchBalance(address);
       } else if (!isConnected) {
         // Reset when disconnected
+        console.log('🔌 Wallet disconnected, resetting balance');
         setBalance('0.0000');
         hasFetchedRef.current = false;
         lastFetchedAddressRef.current = '';
@@ -127,40 +278,75 @@ export default function Home() {
     };
 
     // Use a small timeout to ensure state is stable
-    const timer = setTimeout(() => {
+    fetchTimeout = setTimeout(() => {
       fetchIfNeeded();
     }, 100);
 
     return () => {
       mounted = false;
-      clearTimeout(timer);
+      clearTimeout(fetchTimeout);
     };
-  }, [isConnected, smartWalletPubkey, connection]);
+  }, [isConnected, smartWalletPubkey, connection, fetchBalance]);
 
   // ============================================
-  // FUNCTION: Manual balance refresh
+  // FUNCTION: Manual balance refresh (Memoized)
   // ============================================
-  const handleRefreshBalance = () => {
+  const handleRefreshBalance = useCallback(() => {
     if (smartWalletPubkey && !isLoading) {
       console.log('🔄 Manual refresh requested');
-      hasFetchedRef.current = false; // Reset to allow fresh fetch
-      fetchBalance(smartWalletPubkey.toString());
+      fetchBalance(smartWalletPubkey.toString(), true);
     }
-  };
+  }, [smartWalletPubkey, isLoading, fetchBalance]);
 
   // ============================================
-  // FUNCTION: Handle transaction completion
+  // FUNCTION: Handle transaction completion (Memoized)
   // ============================================
-  const handleTransactionComplete = () => {
-    if (smartWalletPubkey) {
-      console.log('✅ Transaction complete, refreshing balance...');
-      // Wait for blockchain confirmation before refreshing
-      setTimeout(() => {
-        hasFetchedRef.current = false; // Reset to allow fresh fetch
-        fetchBalance(smartWalletPubkey.toString());
-      }, 2000);
+  const handleTransactionComplete = useCallback(() => {
+    console.log('🔄 Transaction completed, scheduling balance refresh...');
+    
+    const address = walletAddressRef.current;
+    
+    if (!address) {
+      console.log('❌ No wallet connected');
+      return;
     }
-  };
+    
+    // ============================================
+    // WHY WE USE window.__balanceTimeouts:
+    // ============================================
+    // 1. Prevents multiple simultaneous refresh attempts that could cause race conditions
+    // 2. Allows us to cancel pending refreshes if user disconnects or navigates away
+    // 3. Ensures cleanup happens properly to prevent memory leaks
+    // 4. Stores timeout IDs globally so they survive component re-renders
+    // ============================================
+    
+    // Clear any existing timeouts first to prevent duplicate refreshes
+    const timeoutIds = window.__balanceTimeouts || [];
+    timeoutIds.forEach(id => clearTimeout(id));
+    window.__balanceTimeouts = [];
+    
+    // First check immediately (WebSocket might have already updated it)
+    console.log('🔄 Checking balance immediately...');
+    fetchBalance(address, true);
+    
+    // Wait 2 seconds for transaction confirmation
+    const timeout1 = setTimeout(() => {
+      console.log('🔄 Refreshing balance after 2 seconds...');
+      fetchBalance(address, true);
+    }, 2000);
+    
+    // Store timeout ID so we can cancel it later if needed
+    window.__balanceTimeouts.push(timeout1);
+    
+    // Optional: One more check after 5 seconds as a final fallback
+    const timeout2 = setTimeout(() => {
+      console.log('🔄 Final balance check after 5 seconds...');
+      fetchBalance(address, true);
+    }, 5000);
+    
+    // Store this timeout ID as well
+    window.__balanceTimeouts.push(timeout2);
+  }, [fetchBalance]);
 
   // ============================================
   // FUNCTION: Close mobile menu
@@ -172,7 +358,9 @@ export default function Home() {
   // ============================================
   // FUNCTION: Toggle mobile menu (with proper close logic)
   // ============================================
-  const toggleMobileMenu = () => {
+  const toggleMobileMenu = (e?: React.MouseEvent) => {
+    // Prevent event bubbling to avoid conflicts with outside click detection
+    e?.stopPropagation();
     setMobileMenuOpen(prev => !prev);
   };
 
@@ -186,6 +374,33 @@ export default function Home() {
       closeMobileMenu();
     }
   };
+
+  // ============================================
+  // EFFECT: Cleanup on component unmount
+  // ============================================
+  useEffect(() => {
+    return () => {
+      const conn = connectionRef.current;
+      
+      // Clean up WebSocket subscription when component unmounts
+      // This prevents memory leaks and unwanted updates
+      if (wsSubscriptionRef.current !== null && conn) {
+        console.log('🧹 Final cleanup - removing WebSocket subscription');
+        try {
+          conn.removeAccountChangeListener(wsSubscriptionRef.current);
+        } catch (error) {
+          console.log('Error in final cleanup:', error);
+        }
+        wsSubscriptionRef.current = null;
+      }
+      
+      // Clean up all pending balance refresh timeouts
+      // This prevents callbacks from firing after component is unmounted
+      const timeoutIds = window.__balanceTimeouts || [];
+      timeoutIds.forEach(id => clearTimeout(id));
+      window.__balanceTimeouts = [];
+    };
+  }, []); // Empty deps - only run on mount/unmount
 
   // ============================================
   // RENDER: Wallet content
@@ -238,7 +453,7 @@ export default function Home() {
     <div className="app-container">
       
       {/* ============================================
-          HEADER SECTION - UPDATED
+          HEADER SECTION
           ============================================ */}
       <header className="header">
         <div className="header-container">
@@ -256,7 +471,7 @@ export default function Home() {
             </div>
           </a>
 
-          {/* Desktop Navigation - Now properly visible on larger screens */}
+          {/* Desktop Navigation */}
           <nav className="nav">
             <a href="#features" onClick={(e) => { e.preventDefault(); scrollToSection('features'); }}>
               Features
@@ -277,7 +492,7 @@ export default function Home() {
 
           {/* Right side - Auth button and menu */}
           <div className="nav-right">
-            {/* GitHub link - hidden on very small screens */}
+            {/* GitHub link */}
             <a 
               href="https://github.com/lazor-kit/lazor-kit" 
               target="_blank"
@@ -290,15 +505,16 @@ export default function Home() {
               <span>GitHub</span>
             </a>
             
-            {/* Auth Button - connects/disconnects wallet */}
+            {/* Auth Button */}
             <AuthButton classes='btn btn-primary btn-compact' />
             
-            {/* Mobile Menu Button - shown only on mobile */}
+            {/* Mobile Menu Button */}
             <button 
               className="mobile-menu-btn"
-              onClick={toggleMobileMenu} 
+              onClick={toggleMobileMenu}
               aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
               aria-expanded={mobileMenuOpen}
+              type="button"
             >
               {mobileMenuOpen ? (
                 <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -367,7 +583,7 @@ export default function Home() {
               </svg>
             </a>
             
-            {/* AUTH BUTTON IN MOBILE MENU - NOW ADDED */}
+            {/* Auth Button in Mobile Menu */}
             <div className="mobile-menu-auth mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
               <AuthButton classes='btn btn-primary w-full' />
             </div>
@@ -526,6 +742,8 @@ export default function Home() {
                     fromAddress={smartWalletPubkey?.toString()}
                     balance={balance}
                     onTransactionComplete={handleTransactionComplete}
+                    isRefreshingBalance={isRefreshingBalance}
+                    onRefreshBalance={handleRefreshBalance}
                   />
                 )}
                 {activeTab === 'sign' && <MessageSigningPanel />}
